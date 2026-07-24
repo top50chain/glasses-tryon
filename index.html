@@ -313,6 +313,8 @@
   var loadedImages = {};
   var camera = null, faceMesh = null, stream = null;
   var lastBadgeText = "";
+  var smoothedYaw = 0;
+  var currentAngleStage = "front";
 
   function setMsg(text, showSpinner){
     msgEl.style.display = 'flex';
@@ -487,20 +489,23 @@
     var cheekMid = (leftCheek.x + rightCheek.x) / 2;
     var yawRatio = (noseTip.x - cheekMid) / faceWidth; // 0=정면, +면 한쪽, -면 반대쪽으로 회전
 
-    var absYaw = Math.abs(yawRatio);
+    // 프레임마다 흔들리는 회전값을 완화합니다.
+    smoothedYaw = smoothedYaw * 0.78 + yawRatio * 0.22;
+    var absYaw = Math.abs(smoothedYaw);
     var stage, mirror;
-    // ---- 임시로 각도 자동전환을 비활성화하고 정면 고정 ----
-    // (측면/반측면 인식이 아직 불안정해서, 안정화 전까지는 정면만 사용합니다)
-    stage = 'front'; mirror = false;
-    /*
-    if (absYaw < 0.055){
-      stage = 'front'; mirror = false;
-    } else if (absYaw < 0.15){
-      stage = 'semi'; mirror = (yawRatio < 0); // 방향에 따라 좌우 반전
+
+    // 단계별 진입/이탈 기준을 다르게 둬 경계에서 이미지가 깜빡이지 않게 합니다.
+    if (currentAngleStage === 'front') {
+      if (absYaw > 0.075) currentAngleStage = 'semi';
+    } else if (currentAngleStage === 'semi') {
+      if (absYaw < 0.045) currentAngleStage = 'front';
+      else if (absYaw > 0.165) currentAngleStage = 'side';
     } else {
-      stage = 'side'; mirror = (yawRatio < 0);
+      if (absYaw < 0.125) currentAngleStage = 'semi';
     }
-    */
+
+    stage = currentAngleStage;
+    mirror = stage !== 'front' && smoothedYaw < 0;
 
     var angleCfg = product.angles[stage];
     var img = loadImage(angleCfg.image);
@@ -516,15 +521,15 @@
     // 54□20-138 실제 규격을 기본값으로 사용하되, 카메라상 PD만으로 계산하면
     // 얼굴/기기별로 작게 보일 수 있어 관자놀이 폭을 함께 사용합니다.
     var widthFromPD = totalFrameWidthMM * pxPerMM;
-    var widthFromFace = faceWidth * 0.86;
+    var widthFromFace = faceWidth * 0.98;
     var fitScale = (product.fitScale != null) ? product.fitScale : 1.0;
 
     // 두 기준 중 더 큰 값을 채택한 뒤 제품별 보정값 적용
     var glassesWidth = Math.max(widthFromPD, widthFromFace) * fitScale;
 
     // 지나치게 작거나 커지는 상황 방지
-    var minWidth = faceWidth * 0.82;
-    var maxWidth = faceWidth * 1.02;
+    var minWidth = faceWidth * 0.98;
+    var maxWidth = faceWidth * 1.16;
     glassesWidth = Math.max(minWidth, Math.min(glassesWidth, maxWidth));
 
     var glassesHeight = glassesWidth * (img.naturalHeight / img.naturalWidth);
