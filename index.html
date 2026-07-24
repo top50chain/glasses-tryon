@@ -186,7 +186,7 @@
 <body>
 
 <button class="odm50-trigger" id="odm50-open-btn" type="button">
-  📷 &nbsp;이 안경 가상으로 써보기
+  📷 &nbsp;내 얼굴에 어울릴까? 가상피팅하기
 </button>
 
 <div id="odm50-modal-overlay">
@@ -194,7 +194,7 @@
     <button class="odm50-modal-close" id="odm50-close-btn" type="button" aria-label="닫기">✕</button>
 
     <div id="odm50-tryon">
-      <h2><span class="eyebrow">BETA</span> 얼굴로 안경 미리 써보기</h2>
+      <h2><span class="eyebrow">BETA</span> 으뜸50 가상피팅</h2>
       <p class="odm50-sub">고개를 좌우로 돌려보세요 — 안경다리까지 따라와요</p>
 
       <div class="odm50-stage" id="odm50-stage">
@@ -248,7 +248,7 @@
      ============================================================ */
   var PRODUCTS = [
     {
-      id:"2659-C1", name:"2659 무광 블랙", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      id:"2659-C1", name:"2659 무광 블랙", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
       angles:{
         front:{ image:"assets/2659_C1_front.png", dy:0.02, anchorX:0.50 },
         semi: { image:"assets/2659_C1_semi.png",  dy:0.03, anchorX:0.40 },
@@ -256,7 +256,7 @@
       }
     },
     {
-      id:"2659-C2", name:"2659 라이트 그레이", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      id:"2659-C2", name:"2659 라이트 그레이", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
       angles:{
         front:{ image:"assets/2659_C2_front.png", dy:0.02, anchorX:0.50 },
         semi: { image:"assets/2659_C2_semi.png",  dy:0.03, anchorX:0.40 },
@@ -264,7 +264,7 @@
       }
     },
     {
-      id:"2659-C3", name:"2659 매트 그레이", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      id:"2659-C3", name:"2659 매트 그레이", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
       angles:{
         front:{ image:"assets/2659_C3_front.png", dy:0.02, anchorX:0.50 },
         semi: { image:"assets/2659_C3_semi.png",  dy:0.03, anchorX:0.40 },
@@ -272,7 +272,7 @@
       }
     },
     {
-      id:"2659-C4", name:"2659 실버스모그", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      id:"2659-C4", name:"2659 실버스모그", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
       angles:{
         front:{ image:"assets/2659_C4_front.png", dy:0.02, anchorX:0.50 },
         semi: { image:"assets/2659_C4_semi.png",  dy:0.03, anchorX:0.40 },
@@ -280,7 +280,7 @@
       }
     },
     {
-      id:"2659-C5", name:"2659 화이트", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      id:"2659-C5", name:"2659 화이트", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
       angles:{
         front:{ image:"assets/2659_C5_front.png", dy:0.02, anchorX:0.50 },
         semi: { image:"assets/2659_C5_semi.png",  dy:0.03, anchorX:0.40 },
@@ -314,7 +314,11 @@
   var camera = null, faceMesh = null, stream = null;
   var lastBadgeText = "";
   var smoothedYaw = 0;
-  var currentAngleStage = "front";
+  var smoothedWidth = 0;
+  var smoothedCenterX = 0;
+  var smoothedCenterY = 0;
+  var smoothedRoll = 0;
+  var imageCropCache = {};
 
   function setMsg(text, showSpinner){
     msgEl.style.display = 'flex';
@@ -330,6 +334,47 @@
     img.src = url;
     loadedImages[url] = img;
     return img;
+  }
+
+
+  // PNG의 투명 여백을 자동으로 제외해 실제 안경 외곽만 얼굴에 맞춥니다.
+  function getVisibleCrop(img){
+    var key = img.src;
+    if (imageCropCache[key]) return imageCropCache[key];
+
+    var fallback = { x:0, y:0, w:img.naturalWidth, h:img.naturalHeight };
+    if (!img.complete || !img.naturalWidth) return fallback;
+
+    try{
+      var c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      var cctx = c.getContext('2d', { willReadFrequently:true });
+      cctx.drawImage(img,0,0);
+      var data = cctx.getImageData(0,0,c.width,c.height).data;
+
+      var minX=c.width, minY=c.height, maxX=-1, maxY=-1;
+      for (var y=0; y<c.height; y++){
+        for (var x=0; x<c.width; x++){
+          if (data[(y*c.width+x)*4+3] > 10){
+            if (x < minX) minX=x;
+            if (x > maxX) maxX=x;
+            if (y < minY) minY=y;
+            if (y > maxY) maxY=y;
+          }
+        }
+      }
+      if (maxX < minX || maxY < minY){
+        imageCropCache[key] = fallback;
+      } else {
+        minX=Math.max(0,minX-2); minY=Math.max(0,minY-2);
+        maxX=Math.min(c.width-1,maxX+2); maxY=Math.min(c.height-1,maxY+2);
+        imageCropCache[key] = {x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1};
+      }
+    }catch(e){
+      imageCropCache[key] = fallback;
+    }
+    return imageCropCache[key];
   }
 
   function preloadAllImages(){
@@ -461,100 +506,119 @@
     var product = PRODUCTS[currentProductIndex];
     if (!product) return;
 
-    var leftOuter  = toPixel(lm[33],  w, h);
-    var rightOuter = toPixel(lm[263], w, h);
-    var noseBridge = toPixel(lm[168], w, h);
-    var leftCheek  = toPixel(lm[234], w, h);
-    var rightCheek = toPixel(lm[454], w, h);
-    var noseTip    = toPixel(lm[1],   w, h);
-    // 홍채 중심 (refineLandmarks:true일 때 468~477번이 추가로 제공됨)
-    // 468 = 왼쪽 눈 홍채 중심, 473 = 오른쪽 눈 홍채 중심
-    var leftIris   = toPixel(lm[468], w, h);
-    var rightIris  = toPixel(lm[473], w, h);
+    var leftOuter   = toPixel(lm[33],  w, h);
+    var rightOuter  = toPixel(lm[263], w, h);
+    var noseBridge  = toPixel(lm[168], w, h);
+    var leftTemple  = toPixel(lm[234], w, h);
+    var rightTemple = toPixel(lm[454], w, h);
+    var noseTip     = toPixel(lm[1],   w, h);
 
-    // 고개 갸웃(좌우 기울임) 각도는 눈 바깥쪽 점 기준(기준선이 더 길어서 안정적)
-    var dx = rightOuter.x - leftOuter.x;
-    var dy = rightOuter.y - leftOuter.y;
-    var rollAngle = Math.atan2(dy, dx);
+    var eyeDx = rightOuter.x-leftOuter.x;
+    var eyeDy = rightOuter.y-leftOuter.y;
+    var rawRoll = Math.atan2(eyeDy,eyeDx);
 
-    // 실제 동공간거리(PD)는 홍채 중심 사이 거리로 측정 (평균 성인 PD=63mm와 비교해
-    // "이 얼굴에서 1mm가 몇 px인지"를 계산 → 안경 실측 사이즈(mm)를 정확한 px로 환산)
-    var pdx = rightIris.x - leftIris.x;
-    var pdy = rightIris.y - leftIris.y;
-    var pdPx = Math.sqrt(pdx*pdx + pdy*pdy);
-    var pxPerMM = pdPx / AVG_PUPIL_DISTANCE_MM;
+    var faceDx = rightTemple.x-leftTemple.x;
+    var faceDy = rightTemple.y-leftTemple.y;
+    var faceWidthPx = Math.max(1,Math.sqrt(faceDx*faceDx+faceDy*faceDy));
 
-    // 고개 좌우 회전(yaw) 추정: 코끝이 두 볼 중점에서 얼마나 벗어났는지 비율
-    var faceWidth = Math.max(1, rightCheek.x - leftCheek.x);
-    var cheekMid = (leftCheek.x + rightCheek.x) / 2;
-    var yawRatio = (noseTip.x - cheekMid) / faceWidth; // 0=정면, +면 한쪽, -면 반대쪽으로 회전
+    var templeMidX = (leftTemple.x+rightTemple.x)/2;
+    var yawRatio = (noseTip.x-templeMidX)/faceWidthPx;
+    smoothedYaw = smoothedYaw*0.86 + yawRatio*0.14;
 
-    // 프레임마다 흔들리는 회전값을 완화합니다.
-    smoothedYaw = smoothedYaw * 0.78 + yawRatio * 0.22;
-    var absYaw = Math.abs(smoothedYaw);
-    var stage, mirror;
+    var visualYaw = (currentFacing==='user') ? -smoothedYaw : smoothedYaw;
+    var absYaw = Math.abs(visualYaw);
 
-    // 단계별 진입/이탈 기준을 다르게 둬 경계에서 이미지가 깜빡이지 않게 합니다.
-    if (currentAngleStage === 'front') {
-      if (absYaw > 0.075) currentAngleStage = 'semi';
-    } else if (currentAngleStage === 'semi') {
-      if (absYaw < 0.045) currentAngleStage = 'front';
-      else if (absYaw > 0.165) currentAngleStage = 'side';
+    var fromStage,toStage,blend;
+    if (absYaw < 0.025){
+      fromStage='front'; toStage='front'; blend=0;
+    } else if (absYaw < 0.115){
+      fromStage='front'; toStage='semi';
+      blend=(absYaw-0.025)/(0.115-0.025);
     } else {
-      if (absYaw < 0.125) currentAngleStage = 'semi';
+      fromStage='semi'; toStage='side';
+      blend=Math.min(1,(absYaw-0.115)/(0.235-0.115));
+    }
+    blend=Math.max(0,Math.min(1,blend));
+    blend=blend*blend*(3-2*blend);
+
+    var fromCfg=product.angles[fromStage];
+    var toCfg=product.angles[toStage];
+    var fromImg=loadImage(fromCfg.image);
+    var toImg=loadImage(toCfg.image);
+    if (!fromImg.complete || !fromImg.naturalWidth ||
+        !toImg.complete || !toImg.naturalWidth) return;
+
+    // 제품 규격과 현재 얼굴 폭을 이용한 자동 맞춤.
+    // 54□20 제품의 외곽 폭 약 134mm를 평균 관자놀이 폭 140mm에 비례시킵니다.
+    var bridgeMM=(product.bridgeWidth!=null)?product.bridgeWidth:20;
+    var frameOuterMM=2*product.lensWidth+bridgeMM+6;
+    var productRatio=frameOuterMM/140;
+    var fitScale=(product.fitScale!=null)?product.fitScale:1;
+    var poseNarrowing=1-Math.min(absYaw/0.30,1)*0.16;
+    var rawWidth=faceWidthPx*productRatio*fitScale*poseNarrowing;
+
+    var eyeSpan=Math.sqrt(eyeDx*eyeDx+eyeDy*eyeDy);
+    var rawCenterX=noseBridge.x;
+    var rawCenterY=noseBridge.y+eyeSpan*0.11;
+
+    if (!smoothedWidth){
+      smoothedWidth=rawWidth;
+      smoothedCenterX=rawCenterX;
+      smoothedCenterY=rawCenterY;
+      smoothedRoll=rawRoll;
+    } else {
+      smoothedWidth=smoothedWidth*0.78+rawWidth*0.22;
+      smoothedCenterX=smoothedCenterX*0.72+rawCenterX*0.28;
+      smoothedCenterY=smoothedCenterY*0.72+rawCenterY*0.28;
+      smoothedRoll=smoothedRoll*0.80+rawRoll*0.20;
     }
 
-    stage = currentAngleStage;
-    mirror = stage !== 'front' && smoothedYaw < 0;
+    var mirrorAngleImage=visualYaw<0;
 
-    var angleCfg = product.angles[stage];
-    var img = loadImage(angleCfg.image);
-    if (!img.complete || !img.naturalWidth) return;
+    function drawLayer(img,cfg,alpha){
+      if (alpha<=0.002) return;
 
-    // ---- 실측 mm 스펙 기반 크기 계산 ----
-    // 안경 표기(예: 54ㅁ20-138) = 렌즈폭 54mm, 코다리(브릿지) 20mm
-    // 프레임 전체 폭(좌렌즈+브릿지+우렌즈) = 2*lensWidth + bridgeWidth
-    // + 프레임 테두리 두께 여유분(각 3mm씩, 총 6mm)을 살짝 더해 외곽 폭에 가깝게 보정
-    var bridgeWidth = (product.bridgeWidth != null) ? product.bridgeWidth : 20;
-    var totalFrameWidthMM = 2 * product.lensWidth + bridgeWidth + 6;
+      var crop=getVisibleCrop(img);
+      var drawW=smoothedWidth;
+      var drawH=drawW*(crop.h/crop.w);
+      var anchorX=cfg.anchorX;
 
-    // 54□20-138 실제 규격을 기본값으로 사용하되, 카메라상 PD만으로 계산하면
-    // 얼굴/기기별로 작게 보일 수 있어 관자놀이 폭을 함께 사용합니다.
-    var widthFromPD = totalFrameWidthMM * pxPerMM;
-    var widthFromFace = faceWidth * 0.98;
-    var fitScale = (product.fitScale != null) ? product.fitScale : 1.0;
+      if (mirrorAngleImage && cfg!==product.angles.front){
+        anchorX=1-anchorX;
+      }
 
-    // 두 기준 중 더 큰 값을 채택한 뒤 제품별 보정값 적용
-    var glassesWidth = Math.max(widthFromPD, widthFromFace) * fitScale;
+      var centerX=smoothedCenterX + visualYaw*faceWidthPx*0.09;
+      var centerY=smoothedCenterY + smoothedWidth*(cfg.dy||0);
 
-    // 지나치게 작거나 커지는 상황 방지
-    var minWidth = faceWidth * 0.98;
-    var maxWidth = faceWidth * 1.16;
-    glassesWidth = Math.max(minWidth, Math.min(glassesWidth, maxWidth));
+      ctx.save();
+      ctx.translate(centerX,centerY);
+      ctx.rotate(smoothedRoll);
 
-    var glassesHeight = glassesWidth * (img.naturalHeight / img.naturalWidth);
+      if (mirrorAngleImage && cfg!==product.angles.front){
+        ctx.scale(-1,1);
+      }
 
-    var anchorX = mirror ? (1 - angleCfg.anchorX) : angleCfg.anchorX;
-    var centerX = noseBridge.x;
-    // 상하 위치 보정은 이제 안경 자체 실측 폭(px) 기준 비율로 계산
-    var centerY = noseBridge.y + glassesWidth * (angleCfg.dy || 0) + glassesHeight * 0.04;
+      var drawX=-drawW*anchorX;
+      var drawY=-drawH/2;
+      ctx.globalAlpha=alpha*((product.lensAlpha!=null)?product.lensAlpha:1);
 
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rollAngle);
-    if (mirror) ctx.scale(-1, 1);
-    // anchorX 지점이 (0,0)에 오도록 그리기
-    var drawX = -glassesWidth * anchorX;
-    var drawY = -glassesHeight / 2;
-    // 렌즈 사진 자체는 이제 (제공해주신 편집본 기준으로) 이미 알맞은 진하기로 만들어져 있다고
-    // 가정하고 기본은 100% 그대로 사용. 필요하면 product.lensAlpha로 미세 조정 가능.
-    ctx.globalAlpha = (product.lensAlpha != null) ? product.lensAlpha : 1.0;
-    ctx.drawImage(img, drawX, drawY, glassesWidth, glassesHeight);
-    ctx.globalAlpha = 1;
-    ctx.restore();
+      ctx.drawImage(
+        img,
+        crop.x,crop.y,crop.w,crop.h,
+        drawX,drawY,drawW,drawH
+      );
+      ctx.restore();
+    }
 
-    var badgeLabel = stage === 'front' ? '정면' : (stage === 'semi' ? '반측면' : '측면');
-    setBadge(badgeLabel, true);
+    if (fromStage===toStage){
+      drawLayer(fromImg,fromCfg,1);
+    } else {
+      drawLayer(fromImg,fromCfg,1-blend);
+      drawLayer(toImg,toCfg,blend);
+    }
+
+    var badgeLabel=absYaw<0.07?'정면':(absYaw<0.17?'반측면':'측면');
+    setBadge(badgeLabel,true);
   }
 
   /* -------------------- 컨트롤 -------------------- */
