@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>으뜸50안경 - 가상 안경 피팅</title>
+<style>
+  :root{
+    --ink:#1c1c1c;
+    --paper:#faf9f6;
+    --line:#e4e1d8;
+    --accent:#c8552d;
+    --accent-dim:#e8d9cf;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  #odm50-tryon{
+    font-family:-apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    max-width:480px;
+    margin:0 auto;
+    padding:14px 14px 24px;
+  }
+  #odm50-tryon h2{
+    font-size:17px;
+    font-weight:700;
+    letter-spacing:-0.02em;
+    margin:2px 4px 4px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  #odm50-tryon h2 .eyebrow{
+    font-size:11px;
+    font-weight:600;
+    color:#fff;
+    background:var(--accent);
+    padding:2px 7px;
+    border-radius:100px;
+    letter-spacing:0;
+  }
+  .odm50-sub{
+    font-size:12px;
+    color:#8a8577;
+    margin:0 4px 10px;
+  }
+  .odm50-stage{
+    position:relative;
+    width:100%;
+    aspect-ratio:3/4;
+    background:#111;
+    border-radius:var(--radius);
+    overflow:hidden;
+    box-shadow:0 1px 3px rgba(0,0,0,.15);
+  }
+  .odm50-stage video{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; opacity:0;
+  }
+  .odm50-stage canvas{
+    position:absolute; inset:0; width:100%; height:100%;
+  }
+  .odm50-angle-badge{
+    position:absolute;
+    top:10px; left:10px;
+    background:rgba(0,0,0,.5);
+    color:#fff;
+    font-size:11px;
+    font-weight:600;
+    padding:5px 10px;
+    border-radius:100px;
+    letter-spacing:.02em;
+    pointer-events:none;
+    transition:opacity .2s ease;
+  }
+  .odm50-overlay-msg{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    color:#fff; text-align:center; padding:24px; font-size:13.5px; line-height:1.6;
+    background:rgba(0,0,0,.35); backdrop-filter:blur(2px);
+  }
+  .odm50-overlay-msg button{
+    margin-top:4px; background:var(--accent); color:#fff; border:none;
+    padding:10px 20px; border-radius:100px; font-size:13.5px; font-weight:600; cursor:pointer;
+  }
+  .odm50-spinner{
+    width:26px;height:26px; border-radius:50%;
+    border:2.5px solid rgba(255,255,255,.35); border-top-color:#fff;
+    animation:odm50-spin .8s linear infinite;
+  }
+  @keyframes odm50-spin{to{transform:rotate(360deg);}}
+
+  .odm50-controls{
+    display:flex; align-items:center; justify-content:space-between; margin-top:10px; gap:8px;
+  }
+  .odm50-iconbtn{
+    width:42px;height:42px; border-radius:50%; border:1px solid var(--line); background:#fff;
+    display:flex;align-items:center;justify-content:center; cursor:pointer; flex:none;
+  }
+  .odm50-iconbtn:active{background:var(--accent-dim);}
+  .odm50-capture{
+    flex:1; height:42px; border-radius:100px; border:none; background:var(--ink); color:#fff;
+    font-size:14px; font-weight:700; letter-spacing:-0.01em; cursor:pointer;
+  }
+  .odm50-capture:active{opacity:.85;}
+
+  .odm50-shelf{margin-top:14px;}
+  .odm50-shelf-label{font-size:11.5px; color:#8a8577; margin:0 4px 8px; font-weight:600;}
+  .odm50-shelf-track{display:flex; gap:10px; overflow-x:auto; padding:2px 4px 6px; scrollbar-width:none;}
+  .odm50-shelf-track::-webkit-scrollbar{display:none;}
+  .odm50-item{flex:none; width:66px; text-align:center; cursor:pointer;}
+  .odm50-item .odm50-thumb{
+    width:66px;height:66px; border-radius:14px; background:#fff; border:1.5px solid var(--line);
+    display:flex;align-items:center;justify-content:center; overflow:hidden;
+    transition:border-color .15s ease, transform .1s ease;
+  }
+  .odm50-item.odm50-active .odm50-thumb{border-color:var(--accent);}
+  .odm50-item:active .odm50-thumb{transform:scale(.96);}
+  .odm50-item .odm50-thumb img{width:82%;height:82%;object-fit:contain;}
+  .odm50-item .odm50-name{font-size:10.5px; color:var(--ink); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+  .odm50-foot{margin-top:10px; font-size:11px; color:#9c9788; text-align:center; line-height:1.6;}
+
+  /* ---- 버튼으로 열기 / 모달 ---- */
+  .odm50-trigger{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    width:100%;
+    max-width:480px;
+    margin:0 auto;
+    height:48px;
+    border-radius:100px;
+    border:1.5px solid var(--ink);
+    background:#fff;
+    color:var(--ink);
+    font-size:14.5px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+    cursor:pointer;
+    font-family:-apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  }
+  .odm50-trigger:active{background:var(--accent-dim); border-color:var(--accent);}
+
+  #odm50-modal-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.55);
+    z-index:9999;
+    align-items:flex-start;
+    justify-content:center;
+    overflow-y:auto;
+    padding:24px 12px;
+  }
+  #odm50-modal-overlay.odm50-open{ display:flex; }
+  .odm50-modal-box{
+    position:relative;
+    width:100%;
+    max-width:480px;
+    background:var(--paper);
+    border-radius:20px;
+    padding:0;
+    box-shadow:0 10px 40px rgba(0,0,0,.35);
+  }
+  .odm50-modal-close{
+    position:absolute;
+    top:-14px; right:-14px;
+    width:34px;height:34px;
+    border-radius:50%;
+    background:#1c1c1c;
+    color:#fff;
+    border:none;
+    font-size:18px;
+    line-height:1;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,.3);
+    z-index:2;
+  }
+</style>
+</head>
+<body>
+
+<button class="odm50-trigger" id="odm50-open-btn" type="button">
+  📷 &nbsp;이 안경 가상으로 써보기
+</button>
+
+<div id="odm50-modal-overlay">
+  <div class="odm50-modal-box">
+    <button class="odm50-modal-close" id="odm50-close-btn" type="button" aria-label="닫기">✕</button>
+
+    <div id="odm50-tryon">
+      <h2><span class="eyebrow">BETA</span> 얼굴로 안경 미리 써보기</h2>
+      <p class="odm50-sub">고개를 좌우로 돌려보세요 — 안경다리까지 따라와요</p>
+
+      <div class="odm50-stage" id="odm50-stage">
+    <video id="odm50-video" playsinline autoplay muted></video>
+    <canvas id="odm50-canvas"></canvas>
+    <div class="odm50-angle-badge" id="odm50-angle-badge" style="opacity:0;">정면</div>
+
+    <div class="odm50-overlay-msg" id="odm50-msg">
+      <div class="odm50-spinner"></div>
+      <div id="odm50-msg-text">카메라를 준비하고 있어요…</div>
+    </div>
+  </div>
+
+  <div class="odm50-controls">
+    <button class="odm50-iconbtn" id="odm50-flip" title="카메라 전환" aria-label="카메라 전환">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 9a8 8 0 0 1 14-4.9M20 15a8 8 0 0 1-14 4.9" stroke="#1c1c1c" stroke-width="1.8" stroke-linecap="round"/><path d="M18 4v4h-4M6 20v-4h4" stroke="#1c1c1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="odm50-capture" id="odm50-capture">사진으로 저장</button>
+    <button class="odm50-iconbtn" id="odm50-reset" title="다시 시작" aria-label="다시 시작">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 12a9 9 0 1 1 3.2 6.9" stroke="#1c1c1c" stroke-width="1.8" stroke-linecap="round"/><path d="M3 6v6h6" stroke="#1c1c1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <div class="odm50-shelf">
+    <p class="odm50-shelf-label">착용해보기 · 컬러를 선택하세요</p>
+    <div class="odm50-shelf-track" id="odm50-shelf-track"></div>
+  </div>
+
+      <p class="odm50-foot">iOS는 Safari, Android는 Chrome에서 가장 안정적으로 동작합니다.<br>카메라 화면은 저장되지 않으며 기기 안에서만 처리됩니다.</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================
+     상품 목록 -- 2659 모델, 컬러별 정면/반측면/측면 3장씩
+     image URL은 아임웹(또는 CDN)에 업로드한 실제 주소로 교체하세요.
+
+     lensWidth/bridgeWidth/templeLength: 안경 스펙 표기 그대로
+       예) "54ㅁ20-138" → lensWidth:54, bridgeWidth:20, templeLength:138
+     이 실측 mm값으로 실제 동공간거리(홍채 위치)를 기준삼아 안경 크기를 계산합니다
+     (더 이상 눈대중 fit 배율에 의존하지 않음).
+
+     dy       : 상하 위치 보정 (양수=아래로), 눈사이거리에 대한 비율
+     anchorX  : 이미지 안에서 "피벗(코다리/힌지)"의 가로 위치 비율(0=왼쪽 끝, 1=오른쪽 끝)
+     ============================================================ */
+  var PRODUCTS = [
+    {
+      id:"2659-C1", name:"2659 무광 블랙", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      angles:{
+        front:{ image:"assets/2659_C1_front.png", dy:0.02, anchorX:0.50 },
+        semi: { image:"assets/2659_C1_semi.png",  dy:0.03, anchorX:0.40 },
+        side: { image:"assets/2659_C1_side.png",  dy:0.05, anchorX:0.18 }
+      }
+    },
+    {
+      id:"2659-C2", name:"2659 라이트 그레이", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      angles:{
+        front:{ image:"assets/2659_C2_front.png", dy:0.02, anchorX:0.50 },
+        semi: { image:"assets/2659_C2_semi.png",  dy:0.03, anchorX:0.40 },
+        side: { image:"assets/2659_C2_side.png",  dy:0.05, anchorX:0.18 }
+      }
+    },
+    {
+      id:"2659-C3", name:"2659 매트 그레이", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      angles:{
+        front:{ image:"assets/2659_C3_front.png", dy:0.02, anchorX:0.50 },
+        semi: { image:"assets/2659_C3_semi.png",  dy:0.03, anchorX:0.40 },
+        side: { image:"assets/2659_C3_side.png",  dy:0.05, anchorX:0.18 }
+      }
+    },
+    {
+      id:"2659-C4", name:"2659 실버스모그", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      angles:{
+        front:{ image:"assets/2659_C4_front.png", dy:0.02, anchorX:0.50 },
+        semi: { image:"assets/2659_C4_semi.png",  dy:0.03, anchorX:0.40 },
+        side: { image:"assets/2659_C4_side.png",  dy:0.05, anchorX:0.18 }
+      }
+    },
+    {
+      id:"2659-C5", name:"2659 화이트", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.18,
+      angles:{
+        front:{ image:"assets/2659_C5_front.png", dy:0.02, anchorX:0.50 },
+        semi: { image:"assets/2659_C5_semi.png",  dy:0.03, anchorX:0.40 },
+        side: { image:"assets/2659_C5_side.png",  dy:0.05, anchorX:0.18 }
+      }
+    }
+  ];
+
+  // 성인 평균 동공간거리(PD). 실제 얼굴의 홍채 사이 거리(px)를 이 mm값과 비교해서
+  // "1mm가 화면에서 몇 px인지"를 계산 → 안경 실측 사이즈(mm)를 정확한 px로 환산.
+  var AVG_PUPIL_DISTANCE_MM = 63; // 사용자별 실제 PD 입력 전 임시 평균값
+
+  var videoEl   = document.getElementById('odm50-video');
+  var canvasEl  = document.getElementById('odm50-canvas');
+  var ctx       = canvasEl.getContext('2d');
+  var stageEl   = document.getElementById('odm50-stage');
+  var badgeEl   = document.getElementById('odm50-angle-badge');
+  var msgEl     = document.getElementById('odm50-msg');
+  var msgTextEl = document.getElementById('odm50-msg-text');
+  var shelfEl   = document.getElementById('odm50-shelf-track');
+  var flipBtn   = document.getElementById('odm50-flip');
+  var captureBtn= document.getElementById('odm50-capture');
+  var resetBtn  = document.getElementById('odm50-reset');
+  var openBtn   = document.getElementById('odm50-open-btn');
+  var closeBtn  = document.getElementById('odm50-close-btn');
+  var modalOverlay = document.getElementById('odm50-modal-overlay');
+
+  var currentFacing = "user";
+  var currentProductIndex = 0;
+  var loadedImages = {};
+  var camera = null, faceMesh = null, stream = null;
+  var lastBadgeText = "";
+
+  function setMsg(text, showSpinner){
+    msgEl.style.display = 'flex';
+    msgTextEl.textContent = text;
+    msgEl.querySelector('.odm50-spinner').style.display = showSpinner === false ? 'none' : 'block';
+  }
+  function hideMsg(){ msgEl.style.display = 'none'; }
+
+  function loadImage(url){
+    if (loadedImages[url]) return loadedImages[url];
+    var img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = url;
+    loadedImages[url] = img;
+    return img;
+  }
+
+  function preloadAllImages(){
+    PRODUCTS.forEach(function(p){
+      loadImage(p.angles.front.image);
+      loadImage(p.angles.semi.image);
+      loadImage(p.angles.side.image);
+    });
+  }
+
+  /* -------------------- 진열대 -------------------- */
+  function renderShelf(){
+    shelfEl.innerHTML = '';
+    PRODUCTS.forEach(function(p, idx){
+      var item = document.createElement('div');
+      item.className = 'odm50-item' + (idx === currentProductIndex ? ' odm50-active' : '');
+      item.innerHTML =
+        '<div class="odm50-thumb"><img src="'+p.angles.front.image+'" alt="'+p.name+'"></div>' +
+        '<div class="odm50-name">'+p.name+'</div>';
+      item.addEventListener('click', function(){
+        currentProductIndex = idx;
+        renderShelf();
+      });
+      shelfEl.appendChild(item);
+    });
+  }
+
+  /* -------------------- 카메라 -------------------- */
+  function startCamera(facing){
+    stopCamera();
+    setMsg('카메라를 준비하고 있어요…', true);
+    var constraints = { video:{ facingMode:facing, width:{ideal:720}, height:{ideal:960} }, audio:false };
+
+    navigator.mediaDevices.getUserMedia(constraints).then(function(s){
+      stream = s;
+      videoEl.srcObject = s;
+      return videoEl.play();
+    }).then(function(){
+      hideMsg();
+      runFaceMesh();
+    }).catch(function(err){
+      console.error(err);
+      if (location.protocol !== 'https:') {
+        setMsg('카메라를 사용하려면 https 주소에서 접속해야 해요.', false);
+      } else {
+        setMsg('카메라 권한이 필요해요. 브라우저 설정에서 카메라 접근을 허용해주세요.', false);
+        var btn = document.createElement('button');
+        btn.textContent = '다시 시도';
+        btn.onclick = function(){ startCamera(currentFacing); };
+        msgEl.appendChild(btn);
+      }
+    });
+  }
+
+  function stopCamera(){
+    if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
+    if (camera){ try{ camera.stop(); }catch(e){} camera = null; }
+  }
+
+  function runFaceMesh(){
+    if (!faceMesh){
+      faceMesh = new FaceMesh({ locateFile:function(file){ return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/' + file; } });
+      faceMesh.setOptions({ maxNumFaces:1, refineLandmarks:true, minDetectionConfidence:0.6, minTrackingConfidence:0.6 });
+      faceMesh.onResults(onResults);
+    }
+    camera = new Camera(videoEl, {
+      onFrame: async function(){ await faceMesh.send({ image: videoEl }); },
+      width:720, height:960
+    });
+    camera.start();
+  }
+
+  function resizeCanvasToVideo(){
+    var rect = stageEl.getBoundingClientRect();
+    canvasEl.width = rect.width * (window.devicePixelRatio || 1);
+    canvasEl.height = rect.height * (window.devicePixelRatio || 1);
+  }
+  resizeCanvasToVideo();
+  window.addEventListener('resize', resizeCanvasToVideo);
+
+  function onResults(results){
+    var w = canvasEl.width, h = canvasEl.height;
+    ctx.save();
+    ctx.clearRect(0,0,w,h);
+
+    // 셀카(전면) 모드일 때 화면 전체를 통째로 한 번만 거울 변환.
+    // (이전에는 좌표마다 따로 뒤집어서 회전각도 계산이 꼬였던 버그가 있었음)
+    if (currentFacing === 'user'){
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+    }
+
+    drawVideoCover(results.image, w, h);
+
+    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0){
+      drawGlasses(results.multiFaceLandmarks[0], w, h);
+    } else {
+      setBadge('', false);
+    }
+    ctx.restore();
+  }
+
+  function drawVideoCover(img, w, h){
+    var iw = img.videoWidth || img.width, ih = img.videoHeight || img.height;
+    if (!iw || !ih) return;
+    var scale = Math.max(w/iw, h/ih);
+    var dw = iw*scale, dh = ih*scale;
+    var dx = (w-dw)/2, dy = (h-dh)/2;
+    // 거울 변환은 onResults에서 캔버스 전체에 이미 적용했으므로 여기선 그냥 그리기만 함
+    ctx.drawImage(img, dx, dy, dw, dh);
+  }
+
+  function setBadge(text, show){
+    if (text !== lastBadgeText){
+      badgeEl.textContent = text;
+      lastBadgeText = text;
+    }
+    badgeEl.style.opacity = show ? '1' : '0';
+  }
+
+  // MediaPipe FaceMesh 인덱스
+  // 33/263: 눈 바깥쪽, 168: 미간, 234/454: 좌우 관자놀이(볼) 라인, 1: 코끝
+  function toPixel(p, w, h){
+    // 거울 변환은 캔버스 전체에 이미 한 번 적용했으므로, 여기선 원본 좌표 그대로 사용
+    return { x: p.x * w, y: p.y * h };
+  }
+
+  function drawGlasses(lm, w, h){
+    var product = PRODUCTS[currentProductIndex];
+    if (!product) return;
+
+    var leftOuter  = toPixel(lm[33],  w, h);
+    var rightOuter = toPixel(lm[263], w, h);
+    var noseBridge = toPixel(lm[168], w, h);
+    var leftCheek  = toPixel(lm[234], w, h);
+    var rightCheek = toPixel(lm[454], w, h);
+    var noseTip    = toPixel(lm[1],   w, h);
+    // 홍채 중심 (refineLandmarks:true일 때 468~477번이 추가로 제공됨)
+    // 468 = 왼쪽 눈 홍채 중심, 473 = 오른쪽 눈 홍채 중심
+    var leftIris   = toPixel(lm[468], w, h);
+    var rightIris  = toPixel(lm[473], w, h);
+
+    // 고개 갸웃(좌우 기울임) 각도는 눈 바깥쪽 점 기준(기준선이 더 길어서 안정적)
+    var dx = rightOuter.x - leftOuter.x;
+    var dy = rightOuter.y - leftOuter.y;
+    var rollAngle = Math.atan2(dy, dx);
+
+    // 실제 동공간거리(PD)는 홍채 중심 사이 거리로 측정 (평균 성인 PD=63mm와 비교해
+    // "이 얼굴에서 1mm가 몇 px인지"를 계산 → 안경 실측 사이즈(mm)를 정확한 px로 환산)
+    var pdx = rightIris.x - leftIris.x;
+    var pdy = rightIris.y - leftIris.y;
+    var pdPx = Math.sqrt(pdx*pdx + pdy*pdy);
+    var pxPerMM = pdPx / AVG_PUPIL_DISTANCE_MM;
+
+    // 고개 좌우 회전(yaw) 추정: 코끝이 두 볼 중점에서 얼마나 벗어났는지 비율
+    var faceWidth = Math.max(1, rightCheek.x - leftCheek.x);
+    var cheekMid = (leftCheek.x + rightCheek.x) / 2;
+    var yawRatio = (noseTip.x - cheekMid) / faceWidth; // 0=정면, +면 한쪽, -면 반대쪽으로 회전
+
+    var absYaw = Math.abs(yawRatio);
+    var stage, mirror;
+    // ---- 임시로 각도 자동전환을 비활성화하고 정면 고정 ----
+    // (측면/반측면 인식이 아직 불안정해서, 안정화 전까지는 정면만 사용합니다)
+    stage = 'front'; mirror = false;
+    /*
+    if (absYaw < 0.055){
+      stage = 'front'; mirror = false;
+    } else if (absYaw < 0.15){
+      stage = 'semi'; mirror = (yawRatio < 0); // 방향에 따라 좌우 반전
+    } else {
+      stage = 'side'; mirror = (yawRatio < 0);
+    }
+    */
+
+    var angleCfg = product.angles[stage];
+    var img = loadImage(angleCfg.image);
+    if (!img.complete || !img.naturalWidth) return;
+
+    // ---- 실측 mm 스펙 기반 크기 계산 ----
+    // 안경 표기(예: 54ㅁ20-138) = 렌즈폭 54mm, 코다리(브릿지) 20mm
+    // 프레임 전체 폭(좌렌즈+브릿지+우렌즈) = 2*lensWidth + bridgeWidth
+    // + 프레임 테두리 두께 여유분(각 3mm씩, 총 6mm)을 살짝 더해 외곽 폭에 가깝게 보정
+    var bridgeWidth = (product.bridgeWidth != null) ? product.bridgeWidth : 20;
+    var totalFrameWidthMM = 2 * product.lensWidth + bridgeWidth + 6;
+
+    // 54□20-138 실제 규격을 기본값으로 사용하되, 카메라상 PD만으로 계산하면
+    // 얼굴/기기별로 작게 보일 수 있어 관자놀이 폭을 함께 사용합니다.
+    var widthFromPD = totalFrameWidthMM * pxPerMM;
+    var widthFromFace = faceWidth * 0.86;
+    var fitScale = (product.fitScale != null) ? product.fitScale : 1.0;
+
+    // 두 기준 중 더 큰 값을 채택한 뒤 제품별 보정값 적용
+    var glassesWidth = Math.max(widthFromPD, widthFromFace) * fitScale;
+
+    // 지나치게 작거나 커지는 상황 방지
+    var minWidth = faceWidth * 0.82;
+    var maxWidth = faceWidth * 1.02;
+    glassesWidth = Math.max(minWidth, Math.min(glassesWidth, maxWidth));
+
+    var glassesHeight = glassesWidth * (img.naturalHeight / img.naturalWidth);
+
+    var anchorX = mirror ? (1 - angleCfg.anchorX) : angleCfg.anchorX;
+    var centerX = noseBridge.x;
+    // 상하 위치 보정은 이제 안경 자체 실측 폭(px) 기준 비율로 계산
+    var centerY = noseBridge.y + glassesWidth * (angleCfg.dy || 0) + glassesHeight * 0.04;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rollAngle);
+    if (mirror) ctx.scale(-1, 1);
+    // anchorX 지점이 (0,0)에 오도록 그리기
+    var drawX = -glassesWidth * anchorX;
+    var drawY = -glassesHeight / 2;
+    // 렌즈 사진 자체는 이제 (제공해주신 편집본 기준으로) 이미 알맞은 진하기로 만들어져 있다고
+    // 가정하고 기본은 100% 그대로 사용. 필요하면 product.lensAlpha로 미세 조정 가능.
+    ctx.globalAlpha = (product.lensAlpha != null) ? product.lensAlpha : 1.0;
+    ctx.drawImage(img, drawX, drawY, glassesWidth, glassesHeight);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    var badgeLabel = stage === 'front' ? '정면' : (stage === 'semi' ? '반측면' : '측면');
+    setBadge(badgeLabel, true);
+  }
+
+  /* -------------------- 컨트롤 -------------------- */
+  flipBtn.addEventListener('click', function(){
+    currentFacing = (currentFacing === 'user') ? 'environment' : 'user';
+    startCamera(currentFacing);
+  });
+
+  resetBtn.addEventListener('click', function(){ startCamera(currentFacing); });
+
+  captureBtn.addEventListener('click', function(){
+    canvasEl.toBlob(function(blob){
+      if (!blob) return;
+      var url = URL.createObjectURL(blob);
+      var isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+      if (isMobile){
+        window.open(url, '_blank');
+      } else {
+        var a = document.createElement('a');
+        a.href = url; a.download = '으뜸50안경-가상착용.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      }
+    }, 'image/png', 0.95);
+  });
+
+  /* -------------------- 모달 열기 / 닫기 -------------------- */
+  function openModal(){
+    modalOverlay.classList.add('odm50-open');
+    document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
+
+    // 모달이 화면에 그려진 다음 캔버스 크기를 다시 계산해야 정확함
+    requestAnimationFrame(function(){
+      resizeCanvasToVideo();
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        setMsg('이 브라우저는 카메라 기능을 지원하지 않아요. 최신 Safari/Chrome을 이용해주세요.', false);
+      } else {
+        startCamera(currentFacing);
+      }
+    });
+  }
+
+  function closeModal(){
+    modalOverlay.classList.remove('odm50-open');
+    document.body.style.overflow = '';
+    stopCamera(); // 모달 닫으면 카메라 자원 반드시 해제
+  }
+
+  openBtn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+  modalOverlay.addEventListener('click', function(e){
+    if (e.target === modalOverlay) closeModal(); // 바깥 여백 클릭 시 닫기
+  });
+
+  /* -------------------- 초기화 (카메라는 시작하지 않음) -------------------- */
+  renderShelf();
+  preloadAllImages();
+
+})();
+</script>
+
+</body>
+</html>
