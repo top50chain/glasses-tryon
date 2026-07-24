@@ -337,42 +337,47 @@
   }
 
 
-  // PNG의 투명 여백을 자동으로 제외해 실제 안경 외곽만 얼굴에 맞춥니다.
+  // PNG 내부의 투명 여백을 제외하고 실제 안경 외곽만 사용합니다.
   function getVisibleCrop(img){
     var key = img.src;
     if (imageCropCache[key]) return imageCropCache[key];
 
-    var fallback = { x:0, y:0, w:img.naturalWidth, h:img.naturalHeight };
+    var fallback = {x:0,y:0,w:img.naturalWidth,h:img.naturalHeight};
     if (!img.complete || !img.naturalWidth) return fallback;
 
     try{
-      var c = document.createElement('canvas');
-      c.width = img.naturalWidth;
-      c.height = img.naturalHeight;
-      var cctx = c.getContext('2d', { willReadFrequently:true });
-      cctx.drawImage(img,0,0);
-      var data = cctx.getImageData(0,0,c.width,c.height).data;
+      var c=document.createElement('canvas');
+      c.width=img.naturalWidth;
+      c.height=img.naturalHeight;
+      var cc=c.getContext('2d',{willReadFrequently:true});
+      cc.drawImage(img,0,0);
+      var d=cc.getImageData(0,0,c.width,c.height).data;
+      var minX=c.width,minY=c.height,maxX=-1,maxY=-1;
 
-      var minX=c.width, minY=c.height, maxX=-1, maxY=-1;
-      for (var y=0; y<c.height; y++){
-        for (var x=0; x<c.width; x++){
-          if (data[(y*c.width+x)*4+3] > 10){
-            if (x < minX) minX=x;
-            if (x > maxX) maxX=x;
-            if (y < minY) minY=y;
-            if (y > maxY) maxY=y;
+      for(var y=0;y<c.height;y++){
+        for(var x=0;x<c.width;x++){
+          if(d[(y*c.width+x)*4+3]>10){
+            if(x<minX)minX=x;
+            if(x>maxX)maxX=x;
+            if(y<minY)minY=y;
+            if(y>maxY)maxY=y;
           }
         }
       }
-      if (maxX < minX || maxY < minY){
-        imageCropCache[key] = fallback;
-      } else {
-        minX=Math.max(0,minX-2); minY=Math.max(0,minY-2);
-        maxX=Math.min(c.width-1,maxX+2); maxY=Math.min(c.height-1,maxY+2);
-        imageCropCache[key] = {x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1};
+
+      if(maxX<minX || maxY<minY){
+        imageCropCache[key]=fallback;
+      }else{
+        minX=Math.max(0,minX-2);
+        minY=Math.max(0,minY-2);
+        maxX=Math.min(c.width-1,maxX+2);
+        maxY=Math.min(c.height-1,maxY+2);
+        imageCropCache[key]={
+          x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1
+        };
       }
     }catch(e){
-      imageCropCache[key] = fallback;
+      imageCropCache[key]=fallback;
     }
     return imageCropCache[key];
   }
@@ -502,41 +507,59 @@
     return { x: p.x * w, y: p.y * h };
   }
 
-  function drawGlasses(lm, w, h){
-    var product = PRODUCTS[currentProductIndex];
-    if (!product) return;
+  function drawGlasses(lm,w,h){
+    var product=PRODUCTS[currentProductIndex];
+    if(!product) return;
 
-    var leftOuter   = toPixel(lm[33],  w, h);
-    var rightOuter  = toPixel(lm[263], w, h);
-    var noseBridge  = toPixel(lm[168], w, h);
-    var leftTemple  = toPixel(lm[234], w, h);
-    var rightTemple = toPixel(lm[454], w, h);
-    var noseTip     = toPixel(lm[1],   w, h);
+    var leftEye=toPixel(lm[33],w,h);
+    var rightEye=toPixel(lm[263],w,h);
+    var noseBridge=toPixel(lm[168],w,h);
+    var noseTip=toPixel(lm[1],w,h);
 
-    var eyeDx = rightOuter.x-leftOuter.x;
-    var eyeDy = rightOuter.y-leftOuter.y;
-    var rawRoll = Math.atan2(eyeDy,eyeDx);
+    // 얼굴 양쪽 경계 후보를 여러 쌍으로 측정합니다.
+    // 한 점만 쓰지 않고, 관자놀이/광대/얼굴 외곽 중 가장 안정적인 폭을 선택합니다.
+    var pairs=[
+      [127,356], // 관자놀이 쪽
+      [234,454], // 얼굴 외곽
+      [93,323]   // 광대 쪽
+    ];
 
-    var faceDx = rightTemple.x-leftTemple.x;
-    var faceDy = rightTemple.y-leftTemple.y;
-    var faceWidthPx = Math.max(1,Math.sqrt(faceDx*faceDx+faceDy*faceDy));
+    var bestLeft=null,bestRight=null,faceWidth=0;
+    for(var i=0;i<pairs.length;i++){
+      var l=toPixel(lm[pairs[i][0]],w,h);
+      var r=toPixel(lm[pairs[i][1]],w,h);
+      var dx=r.x-l.x,dy=r.y-l.y;
+      var dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>faceWidth){
+        faceWidth=dist;
+        bestLeft=l;
+        bestRight=r;
+      }
+    }
+    if(!bestLeft || !bestRight || faceWidth<10) return;
 
-    var templeMidX = (leftTemple.x+rightTemple.x)/2;
-    var yawRatio = (noseTip.x-templeMidX)/faceWidthPx;
-    smoothedYaw = smoothedYaw*0.86 + yawRatio*0.14;
+    var eyeDx=rightEye.x-leftEye.x;
+    var eyeDy=rightEye.y-leftEye.y;
+    var rawRoll=Math.atan2(eyeDy,eyeDx);
+    var eyeSpan=Math.sqrt(eyeDx*eyeDx+eyeDy*eyeDy);
 
-    var visualYaw = (currentFacing==='user') ? -smoothedYaw : smoothedYaw;
-    var absYaw = Math.abs(visualYaw);
+    var faceMidX=(bestLeft.x+bestRight.x)/2;
+    var yawRatio=(noseTip.x-faceMidX)/faceWidth;
+    smoothedYaw=smoothedYaw*0.86+yawRatio*0.14;
 
+    var visualYaw=(currentFacing==='user') ? -smoothedYaw : smoothedYaw;
+    var absYaw=Math.abs(visualYaw);
+
+    // 정면/반측면/측면을 부드럽게 혼합합니다.
     var fromStage,toStage,blend;
-    if (absYaw < 0.025){
-      fromStage='front'; toStage='front'; blend=0;
-    } else if (absYaw < 0.115){
-      fromStage='front'; toStage='semi';
-      blend=(absYaw-0.025)/(0.115-0.025);
-    } else {
-      fromStage='semi'; toStage='side';
-      blend=Math.min(1,(absYaw-0.115)/(0.235-0.115));
+    if(absYaw<0.025){
+      fromStage='front';toStage='front';blend=0;
+    }else if(absYaw<0.12){
+      fromStage='front';toStage='semi';
+      blend=(absYaw-0.025)/(0.12-0.025);
+    }else{
+      fromStage='semi';toStage='side';
+      blend=Math.min(1,(absYaw-0.12)/(0.24-0.12));
     }
     blend=Math.max(0,Math.min(1,blend));
     blend=blend*blend*(3-2*blend);
@@ -545,80 +568,83 @@
     var toCfg=product.angles[toStage];
     var fromImg=loadImage(fromCfg.image);
     var toImg=loadImage(toCfg.image);
-    if (!fromImg.complete || !fromImg.naturalWidth ||
-        !toImg.complete || !toImg.naturalWidth) return;
+    if(!fromImg.complete || !fromImg.naturalWidth ||
+       !toImg.complete || !toImg.naturalWidth) return;
 
-    // 제품 규격과 현재 얼굴 폭을 이용한 자동 맞춤.
-    // 54□20 제품의 외곽 폭 약 134mm를 평균 관자놀이 폭 140mm에 비례시킵니다.
-    var bridgeMM=(product.bridgeWidth!=null)?product.bridgeWidth:20;
-    var frameOuterMM=2*product.lensWidth+bridgeMM+6;
-    var productRatio=frameOuterMM/140;
+    /*
+      크기 기준:
+      1) 카메라에서 얼굴 양쪽 경계를 직접 인식
+      2) 54□20 프레임을 기준 규격(외곽 약 134mm)으로 사용
+      3) 다른 제품은 실제 렌즈폭/브릿지 수치 차이만큼 자동 반영
+      즉 고정 퍼센트 확대가 아니라, 현재 얼굴 외곽 폭에 맞춰 계산합니다.
+    */
+    var bridge=(product.bridgeWidth!=null)?product.bridgeWidth:20;
+    var frameOuterMM=2*product.lensWidth+bridge+6;
+    var referenceFrameMM=134; // 현재 54□20 제품의 기준 외곽 폭
+    var productSizeRatio=frameOuterMM/referenceFrameMM;
     var fitScale=(product.fitScale!=null)?product.fitScale:1;
-    var poseNarrowing=1-Math.min(absYaw/0.30,1)*0.16;
-    var rawWidth=faceWidthPx*productRatio*fitScale*poseNarrowing;
 
-    var eyeSpan=Math.sqrt(eyeDx*eyeDx+eyeDy*eyeDy);
-    var rawCenterX=noseBridge.x;
-    var rawCenterY=noseBridge.y+eyeSpan*0.11;
+    // 정면에서는 안경 외곽이 감지된 얼굴 양쪽 경계에 거의 닿도록 맞춤.
+    // 고개를 돌리면 투영 폭이 자연스럽게 조금 줄어듭니다.
+    var poseNarrowing=1-Math.min(absYaw/0.30,1)*0.15;
+    var rawWidth=faceWidth*productSizeRatio*fitScale*poseNarrowing;
 
-    if (!smoothedWidth){
+    var rawCenterX=noseBridge.x + visualYaw*faceWidth*0.07;
+    var rawCenterY=noseBridge.y + eyeSpan*0.12;
+
+    if(!smoothedWidth){
       smoothedWidth=rawWidth;
       smoothedCenterX=rawCenterX;
       smoothedCenterY=rawCenterY;
       smoothedRoll=rawRoll;
-    } else {
-      smoothedWidth=smoothedWidth*0.78+rawWidth*0.22;
+    }else{
+      smoothedWidth=smoothedWidth*0.76+rawWidth*0.24;
       smoothedCenterX=smoothedCenterX*0.72+rawCenterX*0.28;
       smoothedCenterY=smoothedCenterY*0.72+rawCenterY*0.28;
       smoothedRoll=smoothedRoll*0.80+rawRoll*0.20;
     }
 
-    var mirrorAngleImage=visualYaw<0;
+    var mirror=visualYaw<0;
 
     function drawLayer(img,cfg,alpha){
-      if (alpha<=0.002) return;
+      if(alpha<=0.002) return;
 
       var crop=getVisibleCrop(img);
       var drawW=smoothedWidth;
       var drawH=drawW*(crop.h/crop.w);
       var anchorX=cfg.anchorX;
 
-      if (mirrorAngleImage && cfg!==product.angles.front){
+      if(mirror && cfg!==product.angles.front){
         anchorX=1-anchorX;
       }
 
-      var centerX=smoothedCenterX + visualYaw*faceWidthPx*0.09;
-      var centerY=smoothedCenterY + smoothedWidth*(cfg.dy||0);
+      var centerY=smoothedCenterY+smoothedWidth*(cfg.dy||0);
 
       ctx.save();
-      ctx.translate(centerX,centerY);
+      ctx.translate(smoothedCenterX,centerY);
       ctx.rotate(smoothedRoll);
 
-      if (mirrorAngleImage && cfg!==product.angles.front){
+      if(mirror && cfg!==product.angles.front){
         ctx.scale(-1,1);
       }
 
-      var drawX=-drawW*anchorX;
-      var drawY=-drawH/2;
       ctx.globalAlpha=alpha*((product.lensAlpha!=null)?product.lensAlpha:1);
-
       ctx.drawImage(
         img,
         crop.x,crop.y,crop.w,crop.h,
-        drawX,drawY,drawW,drawH
+        -drawW*anchorX,-drawH/2,drawW,drawH
       );
       ctx.restore();
     }
 
-    if (fromStage===toStage){
+    if(fromStage===toStage){
       drawLayer(fromImg,fromCfg,1);
-    } else {
+    }else{
       drawLayer(fromImg,fromCfg,1-blend);
       drawLayer(toImg,toCfg,blend);
     }
 
-    var badgeLabel=absYaw<0.07?'정면':(absYaw<0.17?'반측면':'측면');
-    setBadge(badgeLabel,true);
+    setBadge(absYaw<0.07?'정면':(absYaw<0.17?'반측면':'측면'),true);
   }
 
   /* -------------------- 컨트롤 -------------------- */
