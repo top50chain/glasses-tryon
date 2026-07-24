@@ -465,17 +465,16 @@
     ctx.save();
     ctx.clearRect(0,0,w,h);
 
-    // 셀카(전면) 모드일 때 화면 전체를 통째로 한 번만 거울 변환.
-    // (이전에는 좌표마다 따로 뒤집어서 회전각도 계산이 꼬였던 버그가 있었음)
     if (currentFacing === 'user'){
       ctx.translate(w, 0);
       ctx.scale(-1, 1);
     }
 
-    drawVideoCover(results.image, w, h);
+    // 영상과 랜드마크에 동일한 cover 확대율과 잘림 위치를 적용합니다.
+    var cover = drawVideoCover(results.image, w, h);
 
-    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0){
-      drawGlasses(results.multiFaceLandmarks[0], w, h);
+    if (cover && results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0){
+      drawGlasses(results.multiFaceLandmarks[0], w, h, cover);
     } else {
       setBadge('', false);
     }
@@ -484,12 +483,14 @@
 
   function drawVideoCover(img, w, h){
     var iw = img.videoWidth || img.width, ih = img.videoHeight || img.height;
-    if (!iw || !ih) return;
+    if (!iw || !ih) return null;
+
     var scale = Math.max(w/iw, h/ih);
     var dw = iw*scale, dh = ih*scale;
     var dx = (w-dw)/2, dy = (h-dh)/2;
-    // 거울 변환은 onResults에서 캔버스 전체에 이미 적용했으므로 여기선 그냥 그리기만 함
+
     ctx.drawImage(img, dx, dy, dw, dh);
+    return { iw:iw, ih:ih, scale:scale, dx:dx, dy:dy };
   }
 
   function setBadge(text, show){
@@ -502,19 +503,25 @@
 
   // MediaPipe FaceMesh 인덱스
   // 33/263: 눈 바깥쪽, 168: 미간, 234/454: 좌우 관자놀이(볼) 라인, 1: 코끝
-  function toPixel(p, w, h){
-    // 거울 변환은 캔버스 전체에 이미 한 번 적용했으므로, 여기선 원본 좌표 그대로 사용
-    return { x: p.x * w, y: p.y * h };
+  function toPixel(p, cover){
+    return {
+      x: cover.dx + p.x * cover.iw * cover.scale,
+      y: cover.dy + p.y * cover.ih * cover.scale
+    };
   }
 
-  function drawGlasses(lm,w,h){
+  function drawGlasses(lm,w,h,cover){
     var product=PRODUCTS[currentProductIndex];
     if(!product) return;
 
-    var leftEye=toPixel(lm[33],w,h);
-    var rightEye=toPixel(lm[263],w,h);
-    var noseBridge=toPixel(lm[168],w,h);
-    var noseTip=toPixel(lm[1],w,h);
+    var leftEye=toPixel(lm[33],cover);
+    var rightEye=toPixel(lm[263],cover);
+    var noseBridge=toPixel(lm[168],cover);
+    var noseTip=toPixel(lm[1],cover);
+
+    // refineLandmarks:true에서 제공되는 좌우 홍채 중심
+    var leftIris=lm[468]?toPixel(lm[468],cover):null;
+    var rightIris=lm[473]?toPixel(lm[473],cover):null;
 
     // 얼굴 양쪽 경계 후보를 여러 쌍으로 측정합니다.
     // 한 점만 쓰지 않고, 관자놀이/광대/얼굴 외곽 중 가장 안정적인 폭을 선택합니다.
@@ -526,8 +533,8 @@
 
     var bestLeft=null,bestRight=null,faceWidth=0;
     for(var i=0;i<pairs.length;i++){
-      var l=toPixel(lm[pairs[i][0]],w,h);
-      var r=toPixel(lm[pairs[i][1]],w,h);
+      var l=toPixel(lm[pairs[i][0]],cover);
+      var r=toPixel(lm[pairs[i][1]],cover);
       var dx=r.x-l.x,dy=r.y-l.y;
       var dist=Math.sqrt(dx*dx+dy*dy);
       if(dist>faceWidth){
@@ -572,22 +579,32 @@
        !toImg.complete || !toImg.naturalWidth) return;
 
     /*
-      크기 기준:
-      1) 카메라에서 얼굴 양쪽 경계를 직접 인식
-      2) 54□20 프레임을 기준 규격(외곽 약 134mm)으로 사용
-      3) 다른 제품은 실제 렌즈폭/브릿지 수치 차이만큼 자동 반영
-      즉 고정 퍼센트 확대가 아니라, 현재 얼굴 외곽 폭에 맞춰 계산합니다.
+      54□20 실제 규격을 화면 크기로 환산합니다.
+      얼굴 폭으로 안경 크기를 정하지 않고, 홍채 중심 간 거리(px)를
+      평균 PD 63mm와 비교해 px/mm를 구한 뒤 제품 실측 폭을 적용합니다.
     */
     var bridge=(product.bridgeWidth!=null)?product.bridgeWidth:20;
     var frameOuterMM=2*product.lensWidth+bridge+6;
-    var referenceFrameMM=134; // 현재 54□20 제품의 기준 외곽 폭
-    var productSizeRatio=frameOuterMM/referenceFrameMM;
     var fitScale=(product.fitScale!=null)?product.fitScale:1;
 
-    // 정면에서는 안경 외곽이 감지된 얼굴 양쪽 경계에 거의 닿도록 맞춤.
-    // 고개를 돌리면 투영 폭이 자연스럽게 조금 줄어듭니다.
+    var irisSpan=0;
+    if(leftIris && rightIris){
+      var irisDx=rightIris.x-leftIris.x;
+      var irisDy=rightIris.y-leftIris.y;
+      irisSpan=Math.sqrt(irisDx*irisDx+irisDy*irisDy);
+    }
+
+    // 홍채가 잠시 잡히지 않을 때만 눈 바깥쪽 거리로 대체
+    var pdSpanPx=irisSpan>10 ? irisSpan : eyeSpan*0.78;
+    var pixelsPerMM=pdSpanPx/AVG_PUPIL_DISTANCE_MM;
+
     var poseNarrowing=1-Math.min(absYaw/0.30,1)*0.15;
-    var rawWidth=faceWidth*productSizeRatio*fitScale*poseNarrowing;
+    var rawWidth=frameOuterMM*pixelsPerMM*fitScale*poseNarrowing;
+
+    // 순간 오검출 방지용 범위. 실제 크기 계산은 위의 54□20과 PD가 담당합니다.
+    var minReasonable=faceWidth*0.72;
+    var maxReasonable=faceWidth*1.08;
+    rawWidth=Math.max(minReasonable,Math.min(maxReasonable,rawWidth));
 
     var rawCenterX=noseBridge.x + visualYaw*faceWidth*0.07;
     var rawCenterY=noseBridge.y + eyeSpan*0.12;
