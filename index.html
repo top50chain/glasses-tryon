@@ -195,7 +195,7 @@
 
     <div id="odm50-tryon">
       <h2><span class="eyebrow">BETA</span> 으뜸50 가상피팅</h2>
-      <p class="odm50-sub">고개를 좌우로 돌려보세요 — 안경다리까지 따라와요</p>
+      <p class="odm50-sub">고개를 천천히 좌우로 돌려보세요 — 프레임과 다리가 함께 움직여요</p>
 
       <div class="odm50-stage" id="odm50-stage">
     <video id="odm50-video" playsinline autoplay muted></video>
@@ -248,43 +248,26 @@
      ============================================================ */
   var PRODUCTS = [
     {
-      id:"2659-C1", name:"2659 무광 블랙", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
-      angles:{
-        front:{ image:"assets/2659_C1_front.png", dy:0.02, anchorX:0.50 },
-        semi: { image:"assets/2659_C1_semi.png",  dy:0.03, anchorX:0.40 },
-        side: { image:"assets/2659_C1_side.png",  dy:0.05, anchorX:0.18 }
-      }
-    },
-    {
-      id:"2659-C2", name:"2659 라이트 그레이", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
-      angles:{
-        front:{ image:"assets/2659_C2_front.png", dy:0.02, anchorX:0.50 },
-        semi: { image:"assets/2659_C2_semi.png",  dy:0.03, anchorX:0.40 },
-        side: { image:"assets/2659_C2_side.png",  dy:0.05, anchorX:0.18 }
-      }
-    },
-    {
-      id:"2659-C3", name:"2659 매트 그레이", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
-      angles:{
-        front:{ image:"assets/2659_C3_front.png", dy:0.02, anchorX:0.50 },
-        semi: { image:"assets/2659_C3_semi.png",  dy:0.03, anchorX:0.40 },
-        side: { image:"assets/2659_C3_side.png",  dy:0.05, anchorX:0.18 }
-      }
-    },
-    {
-      id:"2659-C4", name:"2659 실버스모그", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
-      angles:{
-        front:{ image:"assets/2659_C4_front.png", dy:0.02, anchorX:0.50 },
-        semi: { image:"assets/2659_C4_semi.png",  dy:0.03, anchorX:0.40 },
-        side: { image:"assets/2659_C4_side.png",  dy:0.05, anchorX:0.18 }
-      }
-    },
-    {
-      id:"2659-C5", name:"2659 화이트", lensWidth:54, bridgeWidth:20, templeLength:138, fitScale:1.00,
-      angles:{
-        front:{ image:"assets/2659_C5_front.png", dy:0.02, anchorX:0.50 },
-        semi: { image:"assets/2659_C5_semi.png",  dy:0.03, anchorX:0.40 },
-        side: { image:"assets/2659_C5_side.png",  dy:0.05, anchorX:0.18 }
+      id:"2659-C1",
+      name:"2659 무광 블랙",
+      lensWidth:54,
+      bridgeWidth:20,
+      templeLength:138,
+      fitScale:1.00,
+      assets:{
+        full:"assets/2659_C1_full.png",
+        frame:"assets/2659_C1_frame.png",
+        lens:"assets/2659_C1_lens.png",
+        temple:"assets/2659_C1_temple.png"
+      },
+      // 제품별 미세조정: 결과를 보면서 이 값만 조절하면 됩니다.
+      adjust:{
+        dy:0.015,
+        frameScaleY:1.00,
+        templeLengthScale:0.82,
+        templeThicknessScale:0.72,
+        templeHingeX:0.455,
+        templeHingeY:-0.055
       }
     }
   ];
@@ -384,9 +367,10 @@
 
   function preloadAllImages(){
     PRODUCTS.forEach(function(p){
-      loadImage(p.angles.front.image);
-      loadImage(p.angles.semi.image);
-      loadImage(p.angles.side.image);
+      loadImage(p.assets.full);
+      loadImage(p.assets.frame);
+      loadImage(p.assets.lens);
+      loadImage(p.assets.temple);
     });
   }
 
@@ -397,7 +381,7 @@
       var item = document.createElement('div');
       item.className = 'odm50-item' + (idx === currentProductIndex ? ' odm50-active' : '');
       item.innerHTML =
-        '<div class="odm50-thumb"><img src="'+p.angles.front.image+'" alt="'+p.name+'"></div>' +
+        '<div class="odm50-thumb"><img src="'+p.assets.full+'" alt="'+p.name+'"></div>' +
         '<div class="odm50-name">'+p.name+'</div>';
       item.addEventListener('click', function(){
         currentProductIndex = idx;
@@ -518,30 +502,17 @@
     var rightEye=toPixel(lm[263],cover);
     var noseBridge=toPixel(lm[168],cover);
     var noseTip=toPixel(lm[1],cover);
-
-    // refineLandmarks:true에서 제공되는 좌우 홍채 중심
     var leftIris=lm[468]?toPixel(lm[468],cover):null;
     var rightIris=lm[473]?toPixel(lm[473],cover):null;
 
-    // 얼굴 양쪽 경계 후보를 여러 쌍으로 측정합니다.
-    // 한 점만 쓰지 않고, 관자놀이/광대/얼굴 외곽 중 가장 안정적인 폭을 선택합니다.
-    var pairs=[
-      [127,356], // 관자놀이 쪽
-      [234,454], // 얼굴 외곽
-      [93,323]   // 광대 쪽
-    ];
-
+    var pairs=[[127,356],[234,454],[93,323]];
     var bestLeft=null,bestRight=null,faceWidth=0;
     for(var i=0;i<pairs.length;i++){
       var l=toPixel(lm[pairs[i][0]],cover);
       var r=toPixel(lm[pairs[i][1]],cover);
       var dx=r.x-l.x,dy=r.y-l.y;
       var dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist>faceWidth){
-        faceWidth=dist;
-        bestLeft=l;
-        bestRight=r;
-      }
+      if(dist>faceWidth){ faceWidth=dist; bestLeft=l; bestRight=r; }
     }
     if(!bestLeft || !bestRight || faceWidth<10) return;
 
@@ -549,65 +520,31 @@
     var eyeDy=rightEye.y-leftEye.y;
     var rawRoll=Math.atan2(eyeDy,eyeDx);
     var eyeSpan=Math.sqrt(eyeDx*eyeDx+eyeDy*eyeDy);
-
     var faceMidX=(bestLeft.x+bestRight.x)/2;
     var yawRatio=(noseTip.x-faceMidX)/faceWidth;
     smoothedYaw=smoothedYaw*0.86+yawRatio*0.14;
 
     var visualYaw=(currentFacing==='user') ? -smoothedYaw : smoothedYaw;
     var absYaw=Math.abs(visualYaw);
+    var yawN=Math.max(-1,Math.min(1,visualYaw/0.22));
 
-    // 정면/반측면/측면을 부드럽게 혼합합니다.
-    var fromStage,toStage,blend;
-    if(absYaw<0.025){
-      fromStage='front';toStage='front';blend=0;
-    }else if(absYaw<0.12){
-      fromStage='front';toStage='semi';
-      blend=(absYaw-0.025)/(0.12-0.025);
-    }else{
-      fromStage='semi';toStage='side';
-      blend=Math.min(1,(absYaw-0.12)/(0.24-0.12));
-    }
-    blend=Math.max(0,Math.min(1,blend));
-    blend=blend*blend*(3-2*blend);
-
-    var fromCfg=product.angles[fromStage];
-    var toCfg=product.angles[toStage];
-    var fromImg=loadImage(fromCfg.image);
-    var toImg=loadImage(toCfg.image);
-    if(!fromImg.complete || !fromImg.naturalWidth ||
-       !toImg.complete || !toImg.naturalWidth) return;
-
-    /*
-      54□20 실제 규격을 화면 크기로 환산합니다.
-      얼굴 폭으로 안경 크기를 정하지 않고, 홍채 중심 간 거리(px)를
-      평균 PD 63mm와 비교해 px/mm를 구한 뒤 제품 실측 폭을 적용합니다.
-    */
     var bridge=(product.bridgeWidth!=null)?product.bridgeWidth:20;
     var frameOuterMM=2*product.lensWidth+bridge+6;
     var fitScale=(product.fitScale!=null)?product.fitScale:1;
-
     var irisSpan=0;
     if(leftIris && rightIris){
       var irisDx=rightIris.x-leftIris.x;
       var irisDy=rightIris.y-leftIris.y;
       irisSpan=Math.sqrt(irisDx*irisDx+irisDy*irisDy);
     }
-
-    // 홍채가 잠시 잡히지 않을 때만 눈 바깥쪽 거리로 대체
     var pdSpanPx=irisSpan>10 ? irisSpan : eyeSpan*0.78;
     var pixelsPerMM=pdSpanPx/AVG_PUPIL_DISTANCE_MM;
+    var rawWidth=frameOuterMM*pixelsPerMM*fitScale;
+    rawWidth=Math.max(faceWidth*0.72,Math.min(faceWidth*1.08,rawWidth));
 
-    var poseNarrowing=1-Math.min(absYaw/0.30,1)*0.15;
-    var rawWidth=frameOuterMM*pixelsPerMM*fitScale*poseNarrowing;
-
-    // 순간 오검출 방지용 범위. 실제 크기 계산은 위의 54□20과 PD가 담당합니다.
-    var minReasonable=faceWidth*0.72;
-    var maxReasonable=faceWidth*1.08;
-    rawWidth=Math.max(minReasonable,Math.min(maxReasonable,rawWidth));
-
-    var rawCenterX=noseBridge.x + visualYaw*faceWidth*0.07;
-    var rawCenterY=noseBridge.y + eyeSpan*0.12;
+    var adj=product.adjust||{};
+    var rawCenterX=noseBridge.x + visualYaw*faceWidth*0.08;
+    var rawCenterY=noseBridge.y + eyeSpan*(0.12+(adj.dy||0));
 
     if(!smoothedWidth){
       smoothedWidth=rawWidth;
@@ -621,47 +558,71 @@
       smoothedRoll=smoothedRoll*0.80+rawRoll*0.20;
     }
 
-    var mirror=visualYaw<0;
+    var frameImg=loadImage(product.assets.frame);
+    var lensImg=loadImage(product.assets.lens);
+    var templeImg=loadImage(product.assets.temple);
+    if(!frameImg.complete || !frameImg.naturalWidth ||
+       !lensImg.complete || !lensImg.naturalWidth ||
+       !templeImg.complete || !templeImg.naturalWidth) return;
 
-    function drawLayer(img,cfg,alpha){
-      if(alpha<=0.002) return;
+    var frameCrop=getVisibleCrop(frameImg);
+    var lensCrop=getVisibleCrop(lensImg);
+    var templeCrop=getVisibleCrop(templeImg);
+    var frameW=smoothedWidth;
+    var frameH=frameW*(frameCrop.h/frameCrop.w)*(adj.frameScaleY||1);
 
-      var crop=getVisibleCrop(img);
-      var drawW=smoothedWidth;
-      var drawH=drawW*(crop.h/crop.w);
-      var anchorX=cfg.anchorX;
+    // 정면 프레임을 2.5D처럼 압축하고 고개 방향으로 조금 이동합니다.
+    var perspectiveX=1-0.22*Math.abs(yawN);
+    var poseShift=yawN*frameW*0.055;
+    var dominantRight=yawN>=0;
 
-      if(mirror && cfg!==product.angles.front){
-        anchorX=1-anchorX;
-      }
+    function drawTemple(isRight){
+      var sideSign=isRight?1:-1;
+      var dominant=(isRight===dominantRight);
+      var visibility=0.10+Math.abs(yawN)*(dominant?0.90:0.48);
+      if(visibility<0.03) return;
 
-      var centerY=smoothedCenterY+smoothedWidth*(cfg.dy||0);
+      var hingeX=sideSign*frameW*(adj.templeHingeX||0.455)*perspectiveX;
+      var hingeY=frameH*(adj.templeHingeY||-0.055);
+      var baseLen=frameW*(product.templeLength/frameOuterMM)*(adj.templeLengthScale||0.82);
+      var foreshorten=0.16+0.84*Math.abs(yawN);
+      var drawW=baseLen*foreshorten*(dominant?1:0.72);
+      var sourceAspect=templeCrop.h/templeCrop.w;
+      var drawH=Math.max(frameH*0.055,drawW*sourceAspect*(adj.templeThicknessScale||0.72));
+      var backwardsTilt=(-0.10*sideSign)+(yawN*0.055);
 
       ctx.save();
-      ctx.translate(smoothedCenterX,centerY);
+      ctx.translate(smoothedCenterX+poseShift,smoothedCenterY);
       ctx.rotate(smoothedRoll);
-
-      if(mirror && cfg!==product.angles.front){
-        ctx.scale(-1,1);
-      }
-
-      ctx.globalAlpha=alpha*((product.lensAlpha!=null)?product.lensAlpha:1);
-      ctx.drawImage(
-        img,
-        crop.x,crop.y,crop.w,crop.h,
-        -drawW*anchorX,-drawH/2,drawW,drawH
-      );
+      ctx.translate(hingeX,hingeY);
+      ctx.rotate(backwardsTilt);
+      // 원본 다리는 왼쪽 힌지에서 오른쪽 팁 방향. 왼쪽은 좌우 반전합니다.
+      if(!isRight) ctx.scale(-1,1);
+      ctx.globalAlpha=Math.min(0.92,visibility);
+      ctx.drawImage(templeImg,
+        templeCrop.x,templeCrop.y,templeCrop.w,templeCrop.h,
+        0,-drawH/2,drawW,drawH);
       ctx.restore();
     }
 
-    if(fromStage===toStage){
-      drawLayer(fromImg,fromCfg,1);
-    }else{
-      drawLayer(fromImg,fromCfg,1-blend);
-      drawLayer(toImg,toCfg,blend);
+    function drawFrontAsset(img,crop,alpha){
+      var imgH=frameW*(crop.h/crop.w)*(adj.frameScaleY||1);
+      ctx.save();
+      ctx.translate(smoothedCenterX+poseShift,smoothedCenterY);
+      ctx.rotate(smoothedRoll);
+      ctx.scale(perspectiveX,1);
+      ctx.globalAlpha=alpha;
+      ctx.drawImage(img,crop.x,crop.y,crop.w,crop.h,-frameW/2,-imgH/2,frameW,imgH);
+      ctx.restore();
     }
 
-    setBadge(absYaw<0.07?'정면':(absYaw<0.17?'반측면':'측면'),true);
+    // 합성 순서: 양쪽 다리(뒤) → 렌즈 → 프레임.
+    drawTemple(false);
+    drawTemple(true);
+    drawFrontAsset(lensImg,lensCrop,0.88);
+    drawFrontAsset(frameImg,frameCrop,1);
+
+    setBadge(absYaw<0.055?'정면':(absYaw<0.15?'반측면':'측면'),true);
   }
 
   /* -------------------- 컨트롤 -------------------- */
