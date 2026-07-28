@@ -195,7 +195,7 @@
 
     <div id="odm50-tryon">
       <h2><span class="eyebrow">BETA</span> 으뜸50 가상피팅</h2>
-      <p class="odm50-sub">고개를 천천히 좌우로 돌려보세요 — 프레임과 다리가 함께 움직여요</p>
+      <p class="odm50-sub">고개를 천천히 좌우로 돌려보세요 — 얇은 메탈 프레임과 다리가 함께 움직여요</p>
 
       <div class="odm50-stage" id="odm50-stage">
     <video id="odm50-video" playsinline autoplay muted></video>
@@ -235,7 +235,7 @@
   "use strict";
 
   /* ============================================================
-     상품 목록 -- 2659 모델, 컬러별 정면/반측면/측면 3장씩
+     상품 목록 -- 2607 모델, 정면 프레임과 한쪽 다리 2장
      image URL은 아임웹(또는 CDN)에 업로드한 실제 주소로 교체하세요.
 
      lensWidth/bridgeWidth/templeLength: 안경 스펙 표기 그대로
@@ -248,26 +248,21 @@
      ============================================================ */
   var PRODUCTS = [
     {
-      id:"2659-C1",
-      name:"2659 무광 블랙",
-      lensWidth:54,
-      bridgeWidth:20,
-      templeLength:138,
-      fitScale:1.00,
+      id:"2607-C1",
+      name:"2607 블랙 메탈",
+      fitScale:0.94,
       assets:{
-        full:"assets/DIR10_2659_C1_full.png",
-        frame:"assets/DIR10_2659_C1_frame.png",
-        lens:"assets/DIR10_2659_C1_lens.png",
-        temple:"assets/DIR10_2659_C1_temple.png"
+        frame:"assets/DIR10_2607_C1_frame.png",
+        temple:"assets/DIR10_2607_C1_temple.png"
       },
-      // 제품별 미세조정: 결과를 보면서 이 값만 조절하면 됩니다.
+      // 화면에서 결과를 보며 이 값만 미세 조정하면 됩니다.
       adjust:{
         dy:0.015,
         frameScaleY:1.00,
-        templeLengthScale:0.82,
+        templeLengthScale:0.72,
         templeThicknessScale:0.72,
-        templeHingeX:0.455,
-        templeHingeY:-0.055
+        templeHingeX:0.485,
+        templeHingeY:-0.03
       }
     }
   ];
@@ -314,6 +309,7 @@
     if (loadedImages[url]) return loadedImages[url];
     var img = new Image();
     img.crossOrigin = "anonymous";
+    img.onerror = function(){ console.error("이미지 로드 실패:", url); };
     img.src = url;
     loadedImages[url] = img;
     return img;
@@ -367,9 +363,7 @@
 
   function preloadAllImages(){
     PRODUCTS.forEach(function(p){
-      loadImage(p.assets.full);
       loadImage(p.assets.frame);
-      loadImage(p.assets.lens);
       loadImage(p.assets.temple);
     });
   }
@@ -381,7 +375,7 @@
       var item = document.createElement('div');
       item.className = 'odm50-item' + (idx === currentProductIndex ? ' odm50-active' : '');
       item.innerHTML =
-        '<div class="odm50-thumb"><img src="'+p.assets.full+'" alt="'+p.name+'"></div>' +
+        '<div class="odm50-thumb"><img src="'+p.assets.frame+'" alt="'+p.name+'"></div>' +
         '<div class="odm50-name">'+p.name+'</div>';
       item.addEventListener('click', function(){
         currentProductIndex = idx;
@@ -426,7 +420,7 @@
   function runFaceMesh(){
     if (!faceMesh){
       faceMesh = new FaceMesh({ locateFile:function(file){ return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/' + file; } });
-      faceMesh.setOptions({ maxNumFaces:1, refineLandmarks:true, minDetectionConfidence:0.6, minTrackingConfidence:0.6 });
+      faceMesh.setOptions({ maxNumFaces:1, refineLandmarks:false, minDetectionConfidence:0.6, minTrackingConfidence:0.6 });
       faceMesh.onResults(onResults);
     }
     camera = new Camera(videoEl, {
@@ -528,19 +522,11 @@
     var absYaw=Math.abs(visualYaw);
     var yawN=Math.max(-1,Math.min(1,visualYaw/0.22));
 
-    var bridge=(product.bridgeWidth!=null)?product.bridgeWidth:20;
-    var frameOuterMM=2*product.lensWidth+bridge+6;
-    var fitScale=(product.fitScale!=null)?product.fitScale:1;
-    var irisSpan=0;
-    if(leftIris && rightIris){
-      var irisDx=rightIris.x-leftIris.x;
-      var irisDy=rightIris.y-leftIris.y;
-      irisSpan=Math.sqrt(irisDx*irisDx+irisDy*irisDy);
-    }
-    var pdSpanPx=irisSpan>10 ? irisSpan : eyeSpan*0.78;
-    var pixelsPerMM=pdSpanPx/AVG_PUPIL_DISTANCE_MM;
-    var rawWidth=frameOuterMM*pixelsPerMM*fitScale;
-    rawWidth=Math.max(faceWidth*0.72,Math.min(faceWidth*1.08,rawWidth));
+    // 이 버전은 제품 실측값 대신 얼굴 폭을 기준으로 안정적으로 맞춥니다.
+    // 얇은 메탈테는 얼굴 폭의 약 94%가 자연스럽습니다.
+    var fitScale=(product.fitScale!=null)?product.fitScale:0.94;
+    var rawWidth=faceWidth*fitScale;
+    rawWidth=Math.max(faceWidth*0.84,Math.min(faceWidth*1.02,rawWidth));
 
     var adj=product.adjust||{};
     var rawCenterX=noseBridge.x + visualYaw*faceWidth*0.08;
@@ -559,14 +545,11 @@
     }
 
     var frameImg=loadImage(product.assets.frame);
-    var lensImg=loadImage(product.assets.lens);
     var templeImg=loadImage(product.assets.temple);
     if(!frameImg.complete || !frameImg.naturalWidth ||
-       !lensImg.complete || !lensImg.naturalWidth ||
        !templeImg.complete || !templeImg.naturalWidth) return;
 
     var frameCrop=getVisibleCrop(frameImg);
-    var lensCrop=getVisibleCrop(lensImg);
     var templeCrop=getVisibleCrop(templeImg);
     var frameW=smoothedWidth;
     var frameH=frameW*(frameCrop.h/frameCrop.w)*(adj.frameScaleY||1);
@@ -584,7 +567,7 @@
 
       var hingeX=sideSign*frameW*(adj.templeHingeX||0.455)*perspectiveX;
       var hingeY=frameH*(adj.templeHingeY||-0.055);
-      var baseLen=frameW*(product.templeLength/frameOuterMM)*(adj.templeLengthScale||0.82);
+      var baseLen=frameW*(adj.templeLengthScale||0.72);
       var foreshorten=0.16+0.84*Math.abs(yawN);
       var drawW=baseLen*foreshorten*(dominant?1:0.72);
       var sourceAspect=templeCrop.h/templeCrop.w;
@@ -616,10 +599,9 @@
       ctx.restore();
     }
 
-    // 합성 순서: 양쪽 다리(뒤) → 렌즈 → 프레임.
+    // 합성 순서: 양쪽 다리(뒤) → 정면 프레임.
     drawTemple(false);
     drawTemple(true);
-    drawFrontAsset(lensImg,lensCrop,0.88);
     drawFrontAsset(frameImg,frameCrop,1);
 
     setBadge(absYaw<0.055?'정면':(absYaw<0.15?'반측면':'측면'),true);
